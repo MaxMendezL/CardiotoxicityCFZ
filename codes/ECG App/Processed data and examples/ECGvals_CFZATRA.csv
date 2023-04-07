@@ -1,0 +1,6 @@
+Value,Median,STDev
+PR (sec),0.040,0.011
+PQ (sec),0.045,0.006
+QRSp (sec),0.015,0.003
+Pwave (sec),0.008,0.001
+Heart Rate (beats/min),438.485,0.000
