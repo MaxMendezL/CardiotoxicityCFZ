@@ -1,55 +1,43 @@
-
-smoothing <- function(x, y, w=5, ...) { #smoothing data
-  require(zoo)
+smoothing <- function(x, y, w = 5, width_extra = 5) {
   n <- length(y)
-  y.smooth<-data.detrend
-  y.max <- rollapply(zoo(y.smooth), 2*w+5, max, align="center")
-  y.min <- rollapply(zoo(y.smooth), 2*w+1, min, align="center")
-  delta <- y.max - y.smooth[-c(1:w, n+5-1:w)]
-  i.max <- which(delta <= 0) + w 
-  list(x=x[i.max], i=i.max, y.hat=y.smooth)
+  
+  if (length(x) != n) {
+    stop("x and y must have the same length.", call. = FALSE)
+  }
+  
+  y.smooth <- as.numeric(y)
+  
+  y.max <- zoo::rollapply(
+    zoo::zoo(y.smooth),
+    width = 2 * w + width_extra,
+    FUN = max,
+    align = "center",
+    fill = NA
+  )
+  
+  keep <- which(!is.na(y.max))
+  delta <- y.max[keep] - y.smooth[keep]
+  i.max <- keep[delta <= 0]
+  
+  list(
+    x = x[i.max],
+    i = i.max,
+    y.hat = y.smooth
+  )
 }
 
-smoothing2 <- function(x2, y2, w=5, ...) { #smoothing data
-  require(zoo)
-  n <- length(y2)
-  y.smooth<-data.detrend_BTZ
-  y.max <- rollapply(zoo(y.smooth), 2*w, max, align="center")
-  y.min <- rollapply(zoo(y.smooth), 2*w+1, min, align="center")
-  delta <- y.max - y.smooth[-c(1:w, n+5-1:w)]
-  i.max <- which(delta <= 0) + w 
-  list(x2=x2[i.max], i=i.max, y.hat=y.smooth)
+smoothing2 <- function(x, y, w = 5, ...) {
+  smoothing(x, y, w = w, width_extra = 0)
 }
 
-smoothing3 <- function(x3, y3, w=5, ...) { #smoothing data
-  require(zoo)
-  n <- length(y3)
-  y.smooth<-data.detrend_CFZ
-  y.max <- rollapply(zoo(y.smooth), 2*w+5, max, align="center")
-  y.min <- rollapply(zoo(y.smooth), 2*w+1, min, align="center")
-  delta <- y.max - y.smooth[-c(1:w, n+5-1:w)]
-  i.max <- which(delta <= 0) + w 
-  list(x3=x3[i.max], i=i.max, y.hat=y.smooth)
+smoothing3 <- function(x, y, w = 5, ...) {
+  smoothing(x, y, w = w, width_extra = 5)
 }
 
-smoothing4 <- function(x4, y4, w=5, ...) { #smoothing data
-  require(zoo)
-  n <- length(y4)
-  y.smooth<-data.detrend_ATRA
-  y.max <- rollapply(zoo(y.smooth), 2*w+5, max, align="center")
-  y.min <- rollapply(zoo(y.smooth), 2*w+1, min, align="center")
-  delta <- y.max - y.smooth[-c(1:w, n+5-1:w)]
-  i.max <- which(delta <= 0) + w 
-  list(x4=x4[i.max], i=i.max, y.hat=y.smooth)
+smoothing4 <- function(x, y, w = 5, ...) {
+  smoothing(x, y, w = w, width_extra = 5)
 }
 
-smoothing5 <- function(x5, y5, w=5, ...) { #smoothing data
-  require(zoo)
-  n <- length(y5)
-  y.smooth<-data.detrend_CFZATRA
-  y.max <- rollapply(zoo(y.smooth), 2*w+5, max, align="center")
-  y.min <- rollapply(zoo(y.smooth), 2*w+1, min, align="center")
-  delta <- y.max - y.smooth[-c(1:w, n+5-1:w)]
-  i.max <- which(delta <= 0) + w 
-  list(x5=x5[i.max], i=i.max, y.hat=y.smooth)
+smoothing5 <- function(x, y, w = 5, ...) {
+  smoothing(x, y, w = w, width_extra = 5)
 }
