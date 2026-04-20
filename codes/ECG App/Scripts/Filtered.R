@@ -1,327 +1,311 @@
-wavesUI <- 
-  function(id) {
+wavesUI <- function(id) {
   ns <- NS(id)
-tagList(
-  selectInput(ns("Input"), "P waves", choices = c("Control", "BTZ", "CFZ", "ATRA", "CFZATRA")),
-  plotOutput(ns("plot3"))
-)
-  }
-
+  
+  tagList(
+    selectInput(
+      ns("Input"),
+      "P waves",
+      choices = c("Control", "BTZ", "CFZ", "ATRA", "CFZATRA")
+    ),
+    plotOutput(ns("plot3"))
+  )
+}
 
 
 customPlot3 <- function(input, output, session) {
   
-
-output$plot3 <- renderPlot({
-  
-  
-  if(input$Input == "Control") {
+  output$plot3 <- renderPlot({
     
-    x2<-x
-    y2<-y
-    datsm<-as.data.frame(supsmu(x2,y2))
-    x2=datsm$x
-    y2=datsm$y
+    req(input$Input)
     
-    smooth <- function(x, y, w=60, ...) {  
-      require(zoo)
-      n <- length(y)
-      y.smooth<-data.detrend
-      y.med <- rollapply(zoo(y.smooth), 1*w+100, FUN=max, align="center") #2*w= 2 only highest peak, 1 rising peaks, 0.5 rising and decreasing peaks
-      delta <- y.med - y.smooth[-c(1:w, n+1000:w)] 
-      i.max <-which(delta == 0) + w
-      list(y.hat=y.smooth, x=x[i.max], i=i.max)
+    # ---------------------------------
+    # Condition-specific data + tuning
+    # ---------------------------------
+    cfg_list <- list(
+      Control = list(
+        ddt = ddt,
+        detrend = data.detrend,
+        xlim = c(295000, 305000),
+        r_min_distance = 900,
+        r_polarity = "absolute",
+        r_quantile = 0.88,
+        p_lookback = 500,
+        p_guard = 100,
+        p_polarity = "positive",
+        p_frac = 0.25
+      ),
+      BTZ = list(
+        ddt = ddt_BTZ,
+        detrend = data.detrend_BTZ,
+        xlim = c(20000, 30000),
+        r_min_distance = 1100,
+        r_polarity = "positive",
+        r_quantile = 0.90,
+        p_lookback = 500,
+        p_guard = 100,
+        p_polarity = "positive",
+        p_frac = 0.25
+      ),
+      CFZ = list(
+        ddt = ddt_CFZ,
+        detrend = data.detrend_CFZ,
+        xlim = c(295000, 305000),
+        r_min_distance = 1300,
+        r_polarity = "absolute",
+        r_quantile = 0.88,
+        p_lookback = 550,
+        p_guard = 110,
+        p_polarity = "positive",
+        p_frac = 0.25
+      ),
+      ATRA = list(
+        ddt = ddt_ATRA,
+        detrend = data.detrend_ATRA,
+        xlim = c(295000, 305000),
+        r_min_distance = 1100,
+        r_polarity = "absolute",
+        r_quantile = 0.92,
+        p_lookback = 500,
+        p_guard = 100,
+        p_polarity = "positive",
+        p_frac = 0.25
+      ),
+      CFZATRA = list(
+        ddt = ddt_CFZATRA,
+        detrend = data.detrend_CFZATRA,
+        xlim = c(290000, 300000),
+        r_min_distance = 1300,
+        r_polarity = "absolute",
+        r_quantile = 0.88,
+        p_lookback = 550,
+        p_guard = 110,
+        p_polarity = "positive",
+        p_frac = 0.25
+      )
+    )
+    
+    cfg <- cfg_list[[input$Input]]
+    dat <- cfg$ddt
+    
+    if (!all(c("time", "data.detrend") %in% names(dat))) {
+      stop(sprintf("Dataset '%s' must contain columns 'time' and 'data.detrend'.", input$Input), call. = FALSE)
     }
     
-    pwave <- function(w,span){
-      pwave <-smooth(x2,y2,w=w,span=span)
-      position_pwaves <- c() #create and empty vector to store values
-      return(as.list(x2[pwave$i]))
-    } 
+    x <- dat$time
+    y <- as.numeric(dat$data.detrend)
     
+    # ---------------------------------
+    # Light smoothing
+    # ---------------------------------
+    smooth_signal <- function(y, k = 5) {
+      y_sm <- as.numeric(stats::filter(y, rep(1 / k, k), sides = 2))
+      idx_na <- which(is.na(y_sm))
+      if (length(idx_na) > 0) {
+        y_sm[idx_na] <- y[idx_na]
+      }
+      y_sm
+    }
     
-    position_pwaves<-pwave(750, 200)
+    y_sm <- smooth_signal(y, k = 5)
     
-  wave <- function(w,span){
-
-    wave <-smooth(x,y,w=w,span=span)
-    z2 <- NULL
-    get_prepeaks <- function(y2){
-      z2 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero <- which(abs(sub_ddt$data.detrend) <0.06)
-        if(length(sub_zero) >0) z2[i-1] <- sub_ddt$time[tail(sub_zero,1)]}
-      return(z2) }
-    
-    z3 <- NULL
-    get_prepeaks2 <- function(y2){
-      z3 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero2 <- which(abs(sub_ddt$data.detrend) <0.06)
-        if(length(sub_zero2) >0) z3[i-1] <- sub_ddt$time[head(sub_zero2,1)]}
-      return(z3)}
-    
-    plot(x, wave$y.hat,  lwd=2, type="l", col="black", xlab = "Time (Sec)",xlim=c(295000,305000),
-         main="P waves and Intervals",adj=0, bty="n",ylab="Voltage", ylim=c(-4,5), xaxt='n')
-    points(x[wave$i], wave$y.hat[wave$i], col="Blue", pch=18, cex=2)
-    temp_PR <- cbind(get_prepeaks(position_pwaves), 0)
-    temp_QRS <- cbind(get_prepeaks2(position_pwaves), 0)
-    points(temp_PR, col="Red", pch=15, cex=1)
-    points(temp_QRS, col="Red", pch=15, cex=1)
-  } 
-  
-  wave(685, 200) #if FS= 10000, then W=900. If FS=500, then W= 190
-  
-  }else  
-if(input$Input == "BTZ") {   
-  x2<-ddt_BTZ$time
-  y2<-ddt_BTZ$data.detrend
-  
-  datsm<-as.data.frame(supsmu(x2,y2))
-  x2=datsm$x
-  y2=datsm$y
-  
-  smooth2 <- function(x2, y2, w=60, ...) {   #smoothing data
-    n <- length(y2)
-    y.smooth<-data.detrend_BTZ
-    y.med <- rollapply(zoo(y.smooth), 0.75*w+100, FUN=max, align="center") #2*w= 2 only highest peak, 1 rising peaks, 0.5 rising and decreasing peaks
-    delta <- y.med - y.smooth[-c(1:w, n+1000:w)] 
-    i.max <-which(delta == 0) + w
-    list(y.hat=y.smooth, x=x[i.max], i=i.max)
-  }
-  
-  pwave <- function(w,span){
-    pwave <-smooth2(x2,y2,w=w,span=span)
-    position_pwaves <- c() #create and empty vector to store values
-    return(as.list(x2[pwave$i]))
-  } 
-  
-  
-  position_pwaves<-pwave(800, 200)
-  
-  wave2 <- function(w,span){ #PR
-      wave2 <-smooth2(x2,y2,w=w,span=span)
-      z2 <- NULL
-      get_prepeaks <- function(y2){
-        z2 <- NULL
-        for(i in 2:length(y2)){
-          sub_ddt <- ddt_BTZ[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-          sub_zero <- which(abs(sub_ddt$data.detrend) <0.01)
-          if(length(sub_zero) >0) z2[i-1] <- sub_ddt$time[tail(sub_zero,1)]}
-        return(z2) }
+    # ---------------------------------
+    # Polarity-aware R/QRS detector
+    # ---------------------------------
+    detect_r_peaks <- function(y, min_height = NULL, min_distance = 800,
+                               polarity = c("auto", "positive", "negative", "absolute")) {
+      polarity <- match.arg(polarity)
       
-      z3 <- NULL
-      get_prepeaks2 <- function(y2){ #QRS
-        z3 <- NULL
-        for(i in 2:length(y2)){
-          sub_ddt <- ddt_BTZ[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-          sub_zero2 <- which(abs(sub_ddt$data.detrend) <0.005)
-          if(length(sub_zero2) >0) z3[i-1] <- sub_ddt$time[head(sub_zero2,1)]}
-        return(z3)}
+      if (polarity == "auto") {
+        pos_q <- stats::quantile(y, 0.98, na.rm = TRUE)
+        neg_q <- abs(stats::quantile(y, 0.02, na.rm = TRUE))
+        polarity <- if (neg_q > pos_q) "negative" else "positive"
+      }
       
-    plot(x2, wave2$y.hat,  lwd=2, type="l", xlab= "Number of Observations", xlim=c(20000,30000), 
-         main="P waves and Intervals",adj=0, bty="n",ylab="Voltage", ylim=c(-4,5), xaxt='n')
-    points(x2[wave2$i], wave2$y.hat[wave2$i], col="Blue", pch=15, cex=1)
-    temp_PR <- cbind(get_prepeaks(position_pwaves), 0)
-    temp_QRS <- cbind(get_prepeaks2(position_pwaves), 0)
-    points(temp_PR, col="Red", pch=15, cex=1)
-    points(temp_QRS, col="red", pch=15, cex=1)
-    
-  } 
-  
-  wave2(600, 200) #if FS= 10000, then W=900. If FS=500, then W= 190
-  
-}else
-
-if(input$Input == "CFZ") {   
-  
-  x2<-x3
-  y2<-y3
-  
-  datsm<-as.data.frame(supsmu(x2,y2))
-  x2=datsm$x
-  y2=datsm$y
-  
-  
-  smooth3 <- function(x2, y2, w=60, ...) {   #smoothing data
-    n <- length(y2)
-    y.smooth<-data.detrend_CFZ
-    y.med <- rollapply(zoo(y.smooth), 1*w+100, FUN=max, align="center") #2*w= 2 only highest peak, 1 rising peaks, 0.5 rising and decreasing peaks
-    delta <- y.med - y.smooth[-c(1:w, n+1000:w)] 
-    i.max <-which(delta <= 0) + w
-    list(y.hat=y.smooth, x=x[i.max], i=i.max)
-  }
-  
-    pwave <- function(w,span){
-      pwave <-smooth3(x2,y2,w=w,span=span)
-      position_pwaves <- c() #create and empty vector to store values
-      return(as.list(x2[pwave$i]))
-    } 
-    
-    
-    position_pwaves<-pwave(800, 200)
-    
-    wave3 <- function(w,span){
-      wave3 <-smooth3(x2,y2,w=w,span=span)
-      z2 <- NULL
-      get_prepeaks <- function(y2){
-        z2 <- NULL
-        for(i in 2:length(y2)){
-          sub_ddt <- ddt_CFZ[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-          sub_zero <- which(abs(sub_ddt$data.detrend) <0.009)
-          if(length(sub_zero) >0) z2[i-1] <- sub_ddt$time[tail(sub_zero,1)]}
-        return(z2) }
+      y_work <- switch(
+        polarity,
+        positive = y,
+        negative = -y,
+        absolute = abs(y)
+      )
       
-      z3 <- NULL
-      get_prepeaks2 <- function(y2){
-        z3 <- NULL
-        for(i in 2:length(y2)){
-          sub_ddt <- ddt_CFZ[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-          sub_zero2 <- which(abs(sub_ddt$data.detrend) <0.009)
-          if(length(sub_zero2) >0) z3[i-1] <- sub_ddt$time[head(sub_zero2,1)]}
-        return(z3)}
+      if (is.null(min_height)) {
+        min_height <- stats::quantile(y_work, 0.90, na.rm = TRUE)
+      }
       
+      cand <- which(
+        y_work > min_height &
+          c(FALSE, diff(y_work) > 0) &
+          c(diff(y_work) <= 0, FALSE)
+      )
       
-    plot(x3, wave3$y.hat,  lwd=2, type="l", col="black", xlab = "Time (Sec)",xlim=c(295000,305000),
-         main="P waves and Intervals", bty="n",ylab="Voltage", ylim=c(-4,5), xaxt='n')
-    points(x3[wave3$i], wave3$y.hat[wave3$i], col="Blue", pch=18, cex=2)
-    temp_PR <- cbind(get_prepeaks(position_pwaves), 0)
-    temp_QRS <- cbind(get_prepeaks2(position_pwaves), 0)
-    points(temp_PR, col="Red", pch=15, cex=1)
-    points(temp_QRS, col="Red", pch=15, cex=1)
+      if (length(cand) == 0) {
+        return(integer(0))
+      }
+      
+      keep <- cand[1]
+      
+      if (length(cand) > 1) {
+        for (idx in cand[-1]) {
+          if ((idx - tail(keep, 1)) >= min_distance) {
+            keep <- c(keep, idx)
+          } else {
+            if (y_work[idx] > y_work[tail(keep, 1)]) {
+              keep[length(keep)] <- idx
+            }
+          }
+        }
+      }
+      
+      keep
+    }
     
-    } 
+    # ---------------------------------
+    # P-wave detector: one candidate before each R
+    # ---------------------------------
+    detect_p_before_r <- function(y, r_idx, lookback = 350, guard = 80,
+                                  p_polarity = c("positive", "absolute")) {
+      p_polarity <- match.arg(p_polarity)
+      
+      p_idx <- integer(0)
+      
+      if (length(r_idx) == 0) {
+        return(p_idx)
+      }
+      
+      for (r in r_idx) {
+        start <- max(1, r - lookback)
+        end   <- max(start, r - guard)
+        
+        if (end <= start) next
+        
+        seg <- y[start:end]
+        
+        loc <- if (p_polarity == "positive") {
+          which.max(seg)
+        } else {
+          which.max(abs(seg))
+        }
+        
+        if (length(loc) == 1 && !is.na(loc)) {
+          p_idx <- c(p_idx, start + loc - 1)
+        }
+      }
+      
+      unique(p_idx)
+    }
     
-  wave3(790, 200) #if FS= 10000, then W=900. If FS=500, then W= 190
-  
-} else
-
-if(input$Input == "ATRA") {  
-  
-  x2<-x4
-  y2<-y4
-  
-  datsm<-as.data.frame(supsmu(x2,y2))
-  x2=datsm$x
-  y2=datsm$y
-  
-  smooth4 <- function(x4, y4, w=60, ...) {   #smoothing data
-    require(zoo)
-    n <- length(y4)
-    y.smooth<-data.detrend_ATRA
-    y.med <- rollapply(zoo(y.smooth), 1*w+100, FUN=max, align="center") #2*w= 2 only highest peak, 1 rising peaks, 0.5 rising and decreasing peaks
-    delta <- y.med - y.smooth[-c(1:w, n+1000:w)] 
-    i.max <-which(delta == 0) + w
-    list(y.hat=y.smooth, x=x[i.max], i=i.max)
-  }
-  
-  pwave <- function(w,span){
-    pwave <-smooth4(x2,y2,w=w,span=span)
-    position_pwaves <- c() #create and empty vector to store values
-    return(as.list(x2[pwave$i]))
-  } 
-  
-  
-  position_pwaves<-pwave(800, 200)
-  
-  wave4 <- function(w,span){
-    wave4 <-smooth4(x2,y2,w=w,span=span)
-    z2 <- NULL
-    get_prepeaks <- function(y2){
-      z2 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt_ATRA[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero <- which(abs(sub_ddt$data.detrend) <0.1)
-        if(length(sub_zero) >0) z2[i-1] <- sub_ddt$time[tail(sub_zero,1)]}
-      return(z2) }
+    # ---------------------------------
+    # Approximate P onset / offset
+    # ---------------------------------
+    get_p_bounds <- function(y, p_idx, frac = 0.25, max_back = 120, max_forward = 120) {
+      onset <- integer(0)
+      offset <- integer(0)
+      
+      if (length(p_idx) == 0) {
+        return(list(onset = onset, offset = offset))
+      }
+      
+      for (p in p_idx) {
+        amp <- abs(y[p])
+        thr <- frac * amp
+        
+        left <- p
+        step <- 0
+        while (left > 1 && step < max_back && abs(y[left]) > thr) {
+          left <- left - 1
+          step <- step + 1
+        }
+        
+        right <- p
+        step <- 0
+        while (right < length(y) && step < max_forward && abs(y[right]) > thr) {
+          right <- right + 1
+          step <- step + 1
+        }
+        
+        onset <- c(onset, left)
+        offset <- c(offset, right)
+      }
+      
+      list(onset = onset, offset = offset)
+    }
     
-    z3 <- NULL
-    get_prepeaks2 <- function(y2){
-      z3 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt_ATRA[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero2 <- which(abs(sub_ddt$data.detrend) <0.006)
-        if(length(sub_zero2) >0) z3[i-1] <- sub_ddt$time[head(sub_zero2,1)]}
-      return(z3)}
+    # ---------------------------------
+    # Detect R/QRS peaks
+    # ---------------------------------
+    y_for_threshold <- switch(
+      cfg$r_polarity,
+      positive = y_sm,
+      negative = -y_sm,
+      absolute = abs(y_sm)
+    )
     
-  
-    plot(x4, wave4$y.hat,  lwd=2, type="l", col="black", xlab = "Time (Sec)",xlim=c(295000,305000),
-         main="P waves and Intervals",adj=0, bty="n",ylab="Voltage", ylim=c(-4,5), xaxt='n')
-    points(x4[wave4$i], wave4$y.hat[wave4$i], col="Blue", pch=18, cex=2)
-    temp_PR <- cbind(get_prepeaks(position_pwaves), 0)
-    temp_QRS <- cbind(get_prepeaks2(position_pwaves), 0)
-    points(temp_PR, col="Red", pch=15, cex=1)
-    points(temp_QRS, col="red", pch=15, cex=1)
+    r_idx <- detect_r_peaks(
+      y = y_sm,
+      min_height = stats::quantile(y_for_threshold, cfg$r_quantile, na.rm = TRUE),
+      min_distance = cfg$r_min_distance,
+      polarity = cfg$r_polarity
+    )
     
-  } 
-  wave4(600, 200) #if FS= 10000, then W=900. If FS=500, then W= 190
-  
-}else
-
-if(input$Input == "CFZATRA") { 
-  
-  x2<-x5
-  y2<-y5
-  
-  datsm<-as.data.frame(supsmu(x2,y2))
-  x2=datsm$x
-  y2=datsm$y
-  
-  smooth5 <- function(x5, y5, w=60, ...) {   #smoothing data
-    require(zoo)
-    n <- length(y5)
-    y.smooth<-data.detrend_CFZATRA
-    y.med <- rollapply(zoo(y.smooth), 1*w+100, FUN=max, align="center") #2*w= 2 only highest peak, 1 rising peaks, 0.5 rising and decreasing peaks
-    delta <- y.med - y.smooth[-c(1:w, n+1000:w)] 
-    i.max <-which(delta <= 0) + w
-    list(y.hat=y.smooth, x=x[i.max], i=i.max)
-  }
-  
-  pwave <- function(w,span){
-    pwave <-smooth5(x2,y2,w=w,span=span)
-    position_pwaves <- c() #create and empty vector to store values
-    return(as.list(x2[pwave$i]))
-  } 
-  
-  
-  position_pwaves<-pwave(800, 200)
-  
-  wave5 <- function(w,span){
-    wave5 <-smooth5(x2,y2,w=w,span=span)
-    z2 <- NULL
-    get_prepeaks <- function(y2){
-      z2 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt_CFZATRA[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero <- which(abs(sub_ddt$data.detrend) <0.006)
-        if(length(sub_zero) >0) z2[i-1] <- sub_ddt$time[tail(sub_zero,1)]}
-      return(z2) }
+    # ---------------------------------
+    # Detect P waves before each R
+    # ---------------------------------
+    p_idx <- detect_p_before_r(
+      y = y_sm,
+      r_idx = r_idx,
+      lookback = cfg$p_lookback,
+      guard = cfg$p_guard,
+      p_polarity = cfg$p_polarity
+    )
     
-    z3 <- NULL
-    get_prepeaks2 <- function(y2){
-      z3 <- NULL
-      for(i in 2:length(y2)){
-        sub_ddt <- ddt_CFZATRA[seq(as.numeric(y2[i-1]) , as.numeric(y2[i]), 1) , ]
-        sub_zero2 <- which(abs(sub_ddt$data.detrend) <0.009)
-        if(length(sub_zero2) >0) z3[i-1] <- sub_ddt$time[head(sub_zero2,1)]}
-      return(z3)}
+    # ---------------------------------
+    # Approximate P bounds
+    # ---------------------------------
+    p_bounds <- get_p_bounds(
+      y = y_sm,
+      p_idx = p_idx,
+      frac = cfg$p_frac,
+      max_back = 120,
+      max_forward = 120
+    )
     
-    plot(x5, wave5$y.hat,  lwd=2, type="l", col="black", xlab = "Time (Sec)",xlim=c(290000,300000),
-         main="P waves and Intervals",adj=0, bty="n",ylab="Voltage", ylim=c(-4,5), xaxt='n')
-    points(x5[wave5$i], wave5$y.hat[wave5$i], col="Blue", pch=18, cex=2)
-    temp_PR <- cbind(get_prepeaks(position_pwaves), 0)
-    temp_QRS <- cbind(get_prepeaks2(position_pwaves), 0)
-    points(temp_PR, col="Red", pch=15, cex=1)
-    points(temp_QRS, col="Red", pch=15, cex=1)
+    # ---------------------------------
+    # Plot
+    # ---------------------------------
+    plot(
+      x, y,
+      lwd = 2,
+      type = "l",
+      col = "black",
+      xlab = "Time (Sec)",
+      xlim = cfg$xlim,
+      main = "P waves and Intervals",
+      bty = "n",
+      ylab = "Voltage",
+      ylim = c(-4, 4),
+      xaxt = "n"
+    )
     
-  } 
-  wave5(590, 200) #if FS= 10000, then W=900. If FS=500, then W= 190
+    # QRS / R anchors
+    if (length(r_idx) > 0) {
+      points(x[r_idx], y[r_idx], col = "darkgreen", pch = 17, cex = 1.3)
+    }
+    
+    # P-wave peaks
+    if (length(p_idx) > 0) {
+      points(x[p_idx], y[p_idx], col = "blue", pch = 19, cex = 1.2)
+    }
+    
+    # P-wave onset
+    if (length(p_bounds$onset) > 0) {
+      points(x[p_bounds$onset], y[p_bounds$onset], col = "red", pch = 15, cex = 1)
+    }
+    
+    # P-wave offset
+    if (length(p_bounds$offset) > 0) {
+      points(x[p_bounds$offset], y[p_bounds$offset], col = "red", pch = 15, cex = 1)
+    }
+  })
+  
+  return()
 }
-
-}) 
-
-return()
-}
-
